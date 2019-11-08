@@ -1,18 +1,31 @@
-use std::{thread, time};
+use rodio::Sink;
+use rodio::Source;
+use std::env;
 use std::fs::File;
 use std::io::BufReader;
-use rodio::Source;
+use std::{thread, time};
 
 fn main() {
-    println!("-- scli --");
+    println!("scli ☁️  🦀 ☁️ ");
 
+    // read file name
+    let args: Vec<String> = env::args().collect();
+    let filename = &args[1];
+
+    // initialize audio device and load file
     let device = rodio::default_output_device().unwrap();
     println!("using device: {}", device.name());
+    println!("file: {}", filename);
 
-    let file = File::open("sunsets-in-space.mp3").unwrap();
+    let file = File::open(filename).unwrap();
     let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
 
-    rodio::play_raw(&device, source.convert_samples());
+    let player = thread::spawn(move || {
+        let sink = Sink::new(&device);
+        sink.append(source);
 
-    thread::sleep(time::Duration::from_secs(10));
+        thread::sleep(time::Duration::from_secs(10));
+    });
+
+    player.join().unwrap();
 }
