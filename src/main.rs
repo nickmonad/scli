@@ -1,3 +1,8 @@
+#[macro_use]
+extern crate serde;
+
+use reqwest;
+use reqwest::header;
 use rodio::Sink;
 use std::env;
 use std::fs::File;
@@ -16,10 +21,16 @@ enum UserInput {
     Quit,
 }
 
+#[derive(Deserialize, Debug)]
+struct ResolvedResource {
+    status: String,
+    location: String,
+}
+
 fn main() {
     // prepare terminal
     let mut stdout = io::stdout().into_raw_mode().unwrap();
-    let mut stdin = termion::async_stdin().keys();
+    let stdin = termion::async_stdin().keys();
 
     // read file name
     let args: Vec<String> = env::args().collect();
@@ -28,6 +39,11 @@ fn main() {
     // build a channel for user -> player
     let (tx, rx) = mpsc::channel();
 
+    // TESTING, get resolved track
+    let location = resolve("https://soundcloud.com/nickmonad/sunsets-in-space".to_string())
+        .expect("http error");
+
+    write!(stdout, "track: {}\r\n", location).unwrap();
     write!(stdout, "scli ☁️  🦀 ☁️ \r\n").unwrap();
     write!(stdout, "playing: {}\r\n", filename).unwrap();
     stdout.lock().flush().unwrap();
@@ -40,15 +56,37 @@ fn main() {
     player.join().unwrap();
 }
 
+fn resolve(url: String) -> Result<String, reqwest::Error> {
+    let oauth = env::var("SC_TOKEN").expect("no oauth token set");
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::RedirectPolicy::none())
+        .build()?;
+
+    let mut resp = client
+        .get("https://api.soundcloud.com/resolve")
+        .header(header::USER_AGENT, "scli")
+        .query(&[("oauth_token", oauth)])
+        .query(&[("url", url)])
+        .send()?;
+
+    let resolved: ResolvedResource = resp.json()?;
+    Ok(resolved.location)
+}
+
 fn user(mut stdin: termion::input::Keys<termion::AsyncReader>, tx: mpsc::Sender<UserInput>) {
     // listen for user input
     loop {
         let input = stdin.next();
         if let Some(Ok(key)) = input {
             match key {
-                Key::Char('q') => { tx.send(UserInput::Quit).unwrap(); break },
-                Key::Char(' ') => { tx.send(UserInput::PlayPause).unwrap() },
-                _ => { continue }
+                Key::Char('q') => {
+                    tx.send(UserInput::Quit).unwrap();
+                    break;
+                }
+                Key::Char(' ') => {
+                    tx.send(UserInput::PlayPause).unwrap();
+                }
+                _ => continue,
             }
         }
 
@@ -76,10 +114,8 @@ fn player(filename: &String, rx: mpsc::Receiver<UserInput>) {
                 } else {
                     sink.pause();
                 }
-            },
-            UserInput::Quit => {
-                break
             }
+            UserInput::Quit => break,
         }
     }
 }
