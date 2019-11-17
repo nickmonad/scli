@@ -6,6 +6,6 @@ edition = "2018"
 
 [dependencies]
 reqwest = "0.9.22"
-rodio = "0.9.0"
+rodio = "0.10.0"
 serde = { version = "1.0.102", features = [ "derive" ] }
 termion = "1.5.3"
