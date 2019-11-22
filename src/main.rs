@@ -1,8 +1,6 @@
 #[macro_use]
 extern crate serde;
 
-use reqwest;
-use reqwest::header;
 use rodio::Sink;
 use std::env;
 use std::fs::File;
@@ -21,12 +19,6 @@ enum UserInput {
     Quit,
 }
 
-#[derive(Deserialize, Debug)]
-struct ResolvedResource {
-    status: String,
-    location: String,
-}
-
 fn main() {
     // prepare terminal
     let mut stdout = io::stdout().into_raw_mode().unwrap();
@@ -39,11 +31,12 @@ fn main() {
     // build a channel for user -> player
     let (tx, rx) = mpsc::channel();
 
-    // TESTING, get resolved track
-    let location = resolve("https://soundcloud.com/nickmonad/sunsets-in-space".to_string())
+    // get resolved track location
+    let client = sc::Client::new();
+    let stream = client.stream("https://soundcloud.com/nickmonad/sunsets-in-space".to_string())
         .expect("http error");
 
-    write!(stdout, "track: {}\r\n", location).unwrap();
+    write!(stdout, "stream: {}\r\n", stream).unwrap();
     write!(stdout, "scli ☁️  🦀 ☁️ \r\n").unwrap();
     write!(stdout, "playing: {}\r\n", filename).unwrap();
     stdout.lock().flush().unwrap();
@@ -54,23 +47,6 @@ fn main() {
 
     user.join().unwrap();
     player.join().unwrap();
-}
-
-fn resolve(url: String) -> Result<String, reqwest::Error> {
-    let oauth = env::var("SC_TOKEN").expect("no oauth token set");
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::RedirectPolicy::none())
-        .build()?;
-
-    let mut resp = client
-        .get("https://api.soundcloud.com/resolve")
-        .header(header::USER_AGENT, "scli")
-        .query(&[("oauth_token", oauth)])
-        .query(&[("url", url)])
-        .send()?;
-
-    let resolved: ResolvedResource = resp.json()?;
-    Ok(resolved.location)
 }
 
 fn user(mut stdin: termion::input::Keys<termion::AsyncReader>, tx: mpsc::Sender<UserInput>) {
@@ -116,6 +92,65 @@ fn player(filename: &String, rx: mpsc::Receiver<UserInput>) {
                 }
             }
             UserInput::Quit => break,
+        }
+    }
+}
+
+mod sc {
+    use std::env;
+    use reqwest::header;
+
+    pub struct Client {
+        client: reqwest::Client,
+        oauth: String,
+        url: String,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Resource {
+        pub location: String,
+    }
+
+    #[derive(Deserialize)]
+    pub struct Track {
+        pub stream_url: String,
+    }
+
+    impl Client {
+        pub fn new() -> Client {
+            let oauth = env::var("SC_TOKEN").expect("no oauth token set");
+            let rc = reqwest::Client::builder()
+                .redirect(reqwest::RedirectPolicy::none())
+                .build()
+                .unwrap();
+
+            Client { client: rc, oauth: oauth, url: "https://api.soundcloud.com".to_string() }
+        }
+
+        pub fn resolve(&self, url: String) -> Result<String, reqwest::Error> {
+            let endpoint = format!("{}{}", self.url, "/resolve");
+            let mut resp = self.client
+                .get(&endpoint)
+                .header(header::USER_AGENT, "scli")
+                .query(&[("oauth_token", &self.oauth)])
+                .query(&[("url", url)])
+                .send()?;
+
+            let resolved: self::Resource = resp.json()?;
+            Ok(resolved.location)
+        }
+
+        pub fn stream(&self, url: String) -> Result<String, reqwest::Error> {
+            self.resolve(url).and_then(|location: String| {
+                let mut resp = self.client
+                    .get(&location)
+                    .header(header::USER_AGENT, "scli")
+                    .query(&[("oauth_token", &self.oauth)])
+                    .send()?;
+
+                let track: self::Track = resp.json()?;
+                Ok(track.stream_url)
+            })
         }
     }
 }
