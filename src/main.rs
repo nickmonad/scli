@@ -3,7 +3,6 @@ extern crate serde;
 
 use rodio::Sink;
 use std::env;
-use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::io::Write;
@@ -26,20 +25,13 @@ fn main() -> std::io::Result<()> {
 
     // read file name
     let args: Vec<String> = env::args().collect();
-    let filename = &args[1];
+    let url = &args[1];
 
     // build a channel for user -> player
     let (tx, rx) = mpsc::channel();
 
-    // get resolved track location
-    let client = sc::Client::new();
-    let stream = client
-        .stream("https://soundcloud.com/nickmonad/sunsets-in-space".to_string())
-        .expect("http error");
-
-    write!(stdout, "stream: {}\r\n", stream).unwrap();
     write!(stdout, "scli ☁️  🦀 ☁️ \r\n").unwrap();
-    write!(stdout, "playing: {}\r\n", filename).unwrap();
+    write!(stdout, "streaming: {}\r\n", url).unwrap();
     stdout.lock().flush().unwrap();
 
     // event loop
@@ -73,11 +65,14 @@ fn user(mut stdin: termion::input::Keys<termion::AsyncReader>, tx: mpsc::Sender<
     }
 }
 
-fn player(filename: &String, rx: mpsc::Receiver<UserInput>) {
+fn player(url: &String, rx: mpsc::Receiver<UserInput>) {
     // load device and decode audio
     let device = rodio::default_output_device().unwrap();
-    let file = File::open(filename).unwrap();
-    let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
+
+    // resolve stream
+    let client = sc::Client::new();
+    let stream = client.stream(url.to_string()).unwrap();
+    let source = rodio::Decoder::new(BufReader::new(stream)).unwrap();
 
     // start audio on registered device
     let sink = Sink::new(&device);
@@ -102,6 +97,8 @@ fn player(filename: &String, rx: mpsc::Receiver<UserInput>) {
 mod sc {
     use reqwest::header;
     use std::env;
+    use std::io::Cursor;
+    use std::thread;
 
     pub struct Client {
         client: reqwest::Client,
@@ -148,18 +145,46 @@ mod sc {
             Ok(resolved.location)
         }
 
-        pub fn stream(&self, url: String) -> Result<String, reqwest::Error> {
-            self.resolve(url).and_then(|location: String| {
-                let mut resp = self
-                    .client
-                    .get(&location)
-                    .header(header::USER_AGENT, "scli")
-                    .query(&[("oauth_token", &self.oauth)])
-                    .send()?;
+        pub fn stream(&self, url: String) -> Result<Cursor<Vec<u8>>, reqwest::Error> {
+            self.resolve(url)
+                .and_then(|location: String| {
+                    // fetch track metadata
+                    let mut resp = self
+                        .client
+                        .get(&location)
+                        .header(header::USER_AGENT, "scli")
+                        .query(&[("oauth_token", &self.oauth)])
+                        .send()?;
 
-                let track: self::Track = resp.json()?;
-                Ok(track.stream_url)
-            })
+                    let track: self::Track = resp.json()?;
+                    Ok(track.stream_url)
+                })
+                .and_then(|stream_url: String| {
+                    // fetch stream url
+                    let mut resp = self
+                        .client
+                        .get(&stream_url)
+                        .header(header::USER_AGENT, "scli")
+                        .query(&[("oauth_token", &self.oauth)])
+                        .send()?;
+
+                    let resource: self::Resource = resp.json()?;
+                    Ok(resource.location)
+                })
+                .map(|location: String| {
+                    // fetch raw audio from resolved stream CDN location
+                    let mut resp = self.client.get(&location).send().unwrap();
+                    // panic!("status: {}", resp.status().as_str());
+
+                    // create a shared buffer and copy the audio response
+                    let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+                    let ret = buffer.clone();
+                    thread::spawn(move || {
+                        resp.copy_to(&mut buffer).unwrap();
+                    });
+
+                    ret
+                })
         }
     }
 }
