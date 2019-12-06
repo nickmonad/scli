@@ -33,7 +33,8 @@ fn main() {
 
     // get resolved track location
     let client = sc::Client::new();
-    let stream = client.stream("https://soundcloud.com/nickmonad/sunsets-in-space".to_string())
+    let stream = client
+        .stream("https://soundcloud.com/nickmonad/sunsets-in-space".to_string())
         .expect("http error");
 
     write!(stdout, "stream: {}\r\n", stream).unwrap();
@@ -97,8 +98,8 @@ fn player(filename: &String, rx: mpsc::Receiver<UserInput>) {
 }
 
 mod sc {
-    use std::env;
     use reqwest::header;
+    use std::env;
 
     pub struct Client {
         client: reqwest::Client,
@@ -124,12 +125,17 @@ mod sc {
                 .build()
                 .unwrap();
 
-            Client { client: rc, oauth: oauth, url: "https://api.soundcloud.com".to_string() }
+            Client {
+                client: rc,
+                oauth: oauth,
+                url: "https://api.soundcloud.com".to_string(),
+            }
         }
 
         pub fn resolve(&self, url: String) -> Result<String, reqwest::Error> {
             let endpoint = format!("{}{}", self.url, "/resolve");
-            let mut resp = self.client
+            let mut resp = self
+                .client
                 .get(&endpoint)
                 .header(header::USER_AGENT, "scli")
                 .query(&[("oauth_token", &self.oauth)])
@@ -142,7 +148,8 @@ mod sc {
 
         pub fn stream(&self, url: String) -> Result<String, reqwest::Error> {
             self.resolve(url).and_then(|location: String| {
-                let mut resp = self.client
+                let mut resp = self
+                    .client
                     .get(&location)
                     .header(header::USER_AGENT, "scli")
                     .query(&[("oauth_token", &self.oauth)])
