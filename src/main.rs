@@ -19,7 +19,7 @@ enum UserInput {
     Quit,
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
     // prepare terminal
     let mut stdout = io::stdout().into_raw_mode().unwrap();
     let stdin = termion::async_stdin().keys();
@@ -48,6 +48,8 @@ fn main() {
 
     user.join().unwrap();
     player.join().unwrap();
+
+    Ok(())
 }
 
 fn user(mut stdin: termion::input::Keys<termion::AsyncReader>, tx: mpsc::Sender<UserInput>) {
