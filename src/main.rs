@@ -3,6 +3,7 @@ extern crate serde;
 
 use rodio::Sink;
 use std::env;
+use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::io::Write;
@@ -71,8 +72,10 @@ fn player(url: &String, rx: mpsc::Receiver<UserInput>) {
 
     // resolve stream
     let client = sc::Client::new();
-    let stream = client.stream(url.to_string()).unwrap();
-    let source = rodio::Decoder::new(BufReader::new(stream)).unwrap();
+    client.stream(url.to_string()).unwrap();
+
+    let file = File::open("local.mp3").unwrap();
+    let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
 
     // start audio on registered device
     let sink = Sink::new(&device);
@@ -97,7 +100,7 @@ fn player(url: &String, rx: mpsc::Receiver<UserInput>) {
 mod sc {
     use reqwest::header;
     use std::env;
-    use std::io::Cursor;
+    use std::fs::File;
     use std::thread;
 
     pub struct Client {
@@ -145,7 +148,7 @@ mod sc {
             Ok(resolved.location)
         }
 
-        pub fn stream(&self, url: String) -> Result<Cursor<Vec<u8>>, reqwest::Error> {
+        pub fn stream(&self, url: String) -> Result<(), reqwest::Error> {
             self.resolve(url)
                 .and_then(|location: String| {
                     // fetch track metadata
@@ -174,16 +177,14 @@ mod sc {
                 .map(|location: String| {
                     // fetch raw audio from resolved stream CDN location
                     let mut resp = self.client.get(&location).send().unwrap();
-                    // panic!("status: {}", resp.status().as_str());
 
-                    // create a shared buffer and copy the audio response
-                    let mut buffer: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-                    let ret = buffer.clone();
+                    // create a temporary file on disk and spawn a thread to write to it
+                    let mut file = File::create("local.mp3").unwrap();
                     thread::spawn(move || {
-                        resp.copy_to(&mut buffer).unwrap();
+                        resp.copy_to(&mut file).unwrap();
                     });
 
-                    ret
+                    ()
                 })
         }
     }
