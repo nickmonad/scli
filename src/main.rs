@@ -3,7 +3,6 @@ extern crate serde;
 
 use rodio::Sink;
 use std::env;
-use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::io::Write;
@@ -72,10 +71,8 @@ fn player(url: &String, rx: mpsc::Receiver<UserInput>) {
 
     // resolve stream
     let client = sc::Client::new();
-    client.stream(url.to_string()).unwrap();
-
-    let file = File::open("local.mp3").unwrap();
-    let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
+    let stream = client.stream(url.to_string()).unwrap();
+    let source = rodio::Decoder::new(BufReader::new(stream)).unwrap();
 
     // start audio on registered device
     let sink = Sink::new(&device);
@@ -101,7 +98,7 @@ mod sc {
     use reqwest::header;
     use std::env;
     use std::fs::File;
-    use std::thread;
+    use std::{thread, time};
 
     pub struct Client {
         client: reqwest::Client,
@@ -134,21 +131,7 @@ mod sc {
             }
         }
 
-        pub fn resolve(&self, url: String) -> Result<String, reqwest::Error> {
-            let endpoint = format!("{}{}", self.url, "/resolve");
-            let mut resp = self
-                .client
-                .get(&endpoint)
-                .header(header::USER_AGENT, "scli")
-                .query(&[("oauth_token", &self.oauth)])
-                .query(&[("url", url)])
-                .send()?;
-
-            let resolved: self::Resource = resp.json()?;
-            Ok(resolved.location)
-        }
-
-        pub fn stream(&self, url: String) -> Result<(), reqwest::Error> {
+        pub fn stream(&self, url: String) -> Result<File, reqwest::Error> {
             self.resolve(url)
                 .and_then(|location: String| {
                     // fetch track metadata
@@ -174,18 +157,42 @@ mod sc {
                     let resource: self::Resource = resp.json()?;
                     Ok(resource.location)
                 })
-                .map(|location: String| {
+                .and_then(|location: String| {
                     // fetch raw audio from resolved stream CDN location
                     let mut resp = self.client.get(&location).send().unwrap();
 
                     // create a temporary file on disk and spawn a thread to write to it
-                    let mut file = File::create("local.mp3").unwrap();
+                    let mut writer = File::create("stream.mp3").unwrap();
+                    let reader = File::open("stream.mp3").unwrap();
+
+                    // TODO(ngmiller)
+                    // This is terribly hacky. It seems the returned reader file handle
+                    // doesn't handle the writing very well when stream.mp3 doesn't exist
+                    // and causes the player thread to error out with an unrecognized format,
+                    // so we need to sleep a bit after starting the writer thread.
+                    // Ideally, this is all buffered in memory and we don't have to use a file
+                    // to coordinate.
                     thread::spawn(move || {
-                        resp.copy_to(&mut file).unwrap();
+                        resp.copy_to(&mut writer).unwrap();
                     });
 
-                    ()
+                    thread::sleep(time::Duration::from_millis(100));
+                    Ok(reader)
                 })
+        }
+
+        fn resolve(&self, url: String) -> Result<String, reqwest::Error> {
+            let endpoint = format!("{}{}", self.url, "/resolve");
+            let mut resp = self
+                .client
+                .get(&endpoint)
+                .header(header::USER_AGENT, "scli")
+                .query(&[("oauth_token", &self.oauth)])
+                .query(&[("url", url)])
+                .send()?;
+
+            let resolved: self::Resource = resp.json()?;
+            Ok(resolved.location)
         }
     }
 }
