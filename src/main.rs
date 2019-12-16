@@ -113,7 +113,15 @@ mod sc {
 
     #[derive(Deserialize)]
     pub struct Track {
+        pub title: String,
+        pub genre: String,
         pub stream_url: String,
+        pub user: User,
+    }
+
+    #[derive(Deserialize)]
+    pub struct User {
+        pub username: String,
     }
 
     impl Client {
