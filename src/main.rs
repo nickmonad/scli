@@ -29,6 +29,10 @@ fn main() -> std::io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let url = &args[1];
 
+    // resolve the track
+    let client = soundcloud::Client::new();
+    let track = client.track(url.to_string()).unwrap();
+
     // build a channel for user -> player
     let (tx, rx) = mpsc::channel();
 
@@ -37,7 +41,7 @@ fn main() -> std::io::Result<()> {
     stdout.lock().flush().unwrap();
 
     // event loop
-    let player = thread::spawn(move || player(&args[1], rx));
+    let player = thread::spawn(move || player(track, rx));
     let user = thread::spawn(move || user(stdin, tx));
 
     user.join().unwrap();
@@ -67,13 +71,13 @@ fn user(mut stdin: termion::input::Keys<termion::AsyncReader>, tx: mpsc::Sender<
     }
 }
 
-fn player(url: &String, rx: mpsc::Receiver<UserInput>) {
+fn player(track: soundcloud::Track, rx: mpsc::Receiver<UserInput>) {
     // load device and decode audio
     let device = rodio::default_output_device().unwrap();
 
     // resolve stream
     let client = soundcloud::Client::new();
-    let stream = client.stream(url.to_string()).unwrap();
+    let stream = client.stream(track.stream_url).unwrap();
     let source = rodio::Decoder::new(BufReader::new(stream)).unwrap();
 
     // start audio on registered device
