@@ -5,9 +5,11 @@ authors = ["Nick Miller <nick.miller@soundcloud.com>"]
 edition = "2018"
 
 [dependencies]
+failure = "*"
 reqwest = "0.9.22"
 # rodio - using patched version that includes an 'elapsed' source filter
 # https://github.com/RustAudio/rodio/issues/192
 rodio = { path = "../rodio" }
 serde = { version = "1.0.102", features = [ "derive" ] }
 termion = "1.5.3"
+tui = "0.8.0"

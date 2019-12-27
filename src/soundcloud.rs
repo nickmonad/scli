@@ -16,9 +16,10 @@ pub struct Resource {
 
 #[derive(Deserialize)]
 pub struct Track {
-    pub title: String,
+    pub duration: u32,
     pub genre: String,
     pub stream_url: String,
+    pub title: String,
     pub user: User,
 }
 

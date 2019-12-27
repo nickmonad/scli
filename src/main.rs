@@ -5,25 +5,51 @@ use rodio::Sink;
 use std::env;
 use std::io;
 use std::io::BufReader;
-use std::io::Write;
 use std::sync::mpsc;
-use std::{thread, time};
+use std::thread;
 use termion;
 use termion::event::Key;
-use termion::input::TermRead;
 use termion::raw::IntoRawMode;
-
+use termion::screen::AlternateScreen;
+use tui::backend::TermionBackend;
+use tui::layout::{Constraint, Direction, Layout};
+use tui::style::{Color, Style};
+use tui::widgets::{Gauge, Widget};
+use tui::Terminal;
+mod event;
 mod soundcloud;
+
+const SC_ORANGE: Color = Color::Rgb(237, 97, 43);
+
+struct App {
+    progress: u16,
+}
+
+impl App {
+    fn new() -> App {
+        App { progress: 0 }
+    }
+
+    fn update(&mut self) {
+        self.progress += 5;
+        if self.progress > 100 {
+            self.progress = 0;
+        }
+    }
+}
 
 enum UserInput {
     PlayPause,
     Quit,
 }
 
-fn main() -> std::io::Result<()> {
-    // prepare terminal
-    let mut stdout = io::stdout().into_raw_mode().unwrap();
-    let stdin = termion::async_stdin().keys();
+fn main() -> Result<(), failure::Error> {
+    // terminal init
+    let stdout = io::stdout().into_raw_mode()?;
+    let stdout = AlternateScreen::from(stdout);
+    let backend = TermionBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+    terminal.hide_cursor()?;
 
     // read file name
     let args: Vec<String> = env::args().collect();
@@ -36,26 +62,27 @@ fn main() -> std::io::Result<()> {
     // build a channel for user -> player
     let (tx, rx) = mpsc::channel();
 
-    write!(stdout, "scli ☁️  🦀 ☁️ \r\n").unwrap();
-    write!(stdout, "streaming: {}\r\n", url).unwrap();
-    stdout.lock().flush().unwrap();
-
-    // event loop
+    // start player thread and listen for incoming events
     let player = thread::spawn(move || player(track, rx));
-    let user = thread::spawn(move || user(stdin, tx));
+    let events = event::Events::new();
+    let mut app = App::new();
 
-    user.join().unwrap();
-    player.join().unwrap();
-
-    Ok(())
-}
-
-fn user(mut stdin: termion::input::Keys<termion::AsyncReader>, tx: mpsc::Sender<UserInput>) {
-    // listen for user input
     loop {
-        let input = stdin.next();
-        if let Some(Ok(key)) = input {
-            match key {
+        terminal.draw(|mut f| {
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .margin(1)
+                .constraints([Constraint::Percentage(2), Constraint::Percentage(98)].as_ref())
+                .split(f.size());
+
+            Gauge::default()
+                .style(Style::default().fg(SC_ORANGE))
+                .percent(app.progress)
+                .render(&mut f, chunks[0]);
+        })?;
+
+        match events.next()? {
+            event::Event::Input(input) => match input {
                 Key::Char('q') => {
                     tx.send(UserInput::Quit).unwrap();
                     break;
@@ -63,19 +90,23 @@ fn user(mut stdin: termion::input::Keys<termion::AsyncReader>, tx: mpsc::Sender<
                 Key::Char(' ') => {
                     tx.send(UserInput::PlayPause).unwrap();
                 }
-                _ => continue,
+                _ => {}
+            },
+            event::Event::Tick => {
+                app.update();
             }
         }
-
-        thread::sleep(time::Duration::from_millis(50));
     }
+
+    player.join().unwrap();
+    Ok(())
 }
 
 fn player(track: soundcloud::Track, rx: mpsc::Receiver<UserInput>) {
-    // load device and decode audio
+    // load default output device
     let device = rodio::default_output_device().unwrap();
 
-    // resolve stream
+    // resolve and decode stream
     let client = soundcloud::Client::new();
     let stream = client.stream(track.stream_url).unwrap();
     let source = rodio::Decoder::new(BufReader::new(stream)).unwrap();
