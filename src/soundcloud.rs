@@ -56,11 +56,11 @@ impl Client {
         })
     }
 
-    pub fn stream(&self, stream_url: String) -> Result<File, reqwest::Error> {
+    pub fn stream(&self, stream_url: &String) -> Result<File, reqwest::Error> {
         // resolve stream url
         let mut resolve_resp = self
             .client
-            .get(&stream_url)
+            .get(stream_url)
             .header(header::USER_AGENT, "scli")
             .query(&[("oauth_token", &self.oauth)])
             .send()?;

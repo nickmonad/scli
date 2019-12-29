@@ -2,11 +2,12 @@
 extern crate serde;
 
 use rodio::Sink;
+use rodio::Source;
 use std::env;
 use std::io;
 use std::io::BufReader;
-use std::sync::mpsc;
-use std::thread;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use termion;
 use termion::event::Key;
 use termion::raw::IntoRawMode;
@@ -14,33 +15,93 @@ use termion::screen::AlternateScreen;
 use tui::backend::TermionBackend;
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Style};
-use tui::widgets::{Gauge, Widget};
+use tui::widgets::{Block, Borders, Gauge, Widget};
 use tui::Terminal;
 mod event;
 mod soundcloud;
 
 const SC_ORANGE: Color = Color::Rgb(237, 97, 43);
 
-struct App {
-    progress: u16,
+struct Player<'a> {
+    track: &'a soundcloud::Track,
+    audio_sink: rodio::Sink,
+    timer: Arc<Mutex<Duration>>,
+    state: PlayerState,
+    progress: u8,
 }
 
-impl App {
-    fn new() -> App {
-        App { progress: 0 }
-    }
+#[derive(Clone, PartialEq)]
+enum PlayerState {
+    Playing,
+    Paused,
+    Stopped,
+}
 
-    fn update(&mut self) {
-        self.progress += 5;
-        if self.progress > 100 {
-            self.progress = 0;
+enum PlayerEvent {
+    Tick,
+    PlayPause,
+}
+
+impl Player<'_> {
+    fn new(track: &soundcloud::Track) -> Player {
+        // load default output device
+        let device = rodio::default_output_device().unwrap();
+
+        // resolve and decode stream
+        let client = soundcloud::Client::new();
+        let stream = client.stream(&track.stream_url).unwrap();
+        let source = rodio::Decoder::new(BufReader::new(stream)).unwrap();
+
+        let timer = Arc::new(Mutex::new(Duration::from_secs(0)));
+        let with_elapsed = source.buffered().elapsed(Arc::clone(&timer));
+
+        // start audio on registered device
+        let sink = Sink::new(&device);
+        sink.append(with_elapsed);
+
+        Player {
+            track: track,
+            audio_sink: sink,
+            timer: timer,
+            state: PlayerState::Playing,
+            progress: 0,
         }
     }
-}
 
-enum UserInput {
-    PlayPause,
-    Quit,
+    fn update(&mut self, msg: PlayerEvent) {
+        match msg {
+            PlayerEvent::Tick => {
+                if self.audio_sink.empty() {
+                    self.state = PlayerState::Stopped;
+                } else {
+                    if self.state == PlayerState::Stopped {
+                        self.progress = 0;
+                    } else {
+                        let val = *self.timer.lock().unwrap();
+                        self.progress =
+                            ((val.as_millis() as f32 / self.track.duration as f32) * 100.0) as u8;
+                    }
+                }
+            }
+            PlayerEvent::PlayPause => {
+                if self.audio_sink.is_paused() {
+                    self.audio_sink.play();
+                    self.state = PlayerState::Playing;
+                } else {
+                    self.audio_sink.pause();
+                    self.state = PlayerState::Paused;
+                }
+            }
+        }
+    }
+
+    fn state(&self) -> PlayerState {
+        self.state.clone()
+    }
+
+    fn progress(&self) -> u8 {
+        self.progress
+    }
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -59,74 +120,47 @@ fn main() -> Result<(), failure::Error> {
     let client = soundcloud::Client::new();
     let track = client.track(url.to_string()).unwrap();
 
-    // build a channel for user -> player
-    let (tx, rx) = mpsc::channel();
-
-    // start player thread and listen for incoming events
-    let player = thread::spawn(move || player(track, rx));
+    // start player thread and listen for incoming from it
+    let mut app = Player::new(&track);
     let events = event::Events::new();
-    let mut app = App::new();
 
     loop {
         terminal.draw(|mut f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
-                .constraints([Constraint::Percentage(2), Constraint::Percentage(98)].as_ref())
+                .constraints([Constraint::Percentage(5), Constraint::Percentage(95)].as_ref())
                 .split(f.size());
 
             Gauge::default()
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(&format!("{} | {}", track.title, track.user.username)),
+                )
                 .style(Style::default().fg(SC_ORANGE))
-                .percent(app.progress)
+                .percent(app.progress().into())
                 .render(&mut f, chunks[0]);
         })?;
 
         match events.next()? {
+            event::Event::Tick => {
+                app.update(PlayerEvent::Tick);
+                if app.state() == PlayerState::Stopped {
+                    break;
+                }
+            }
             event::Event::Input(input) => match input {
                 Key::Char('q') => {
-                    tx.send(UserInput::Quit).unwrap();
                     break;
                 }
                 Key::Char(' ') => {
-                    tx.send(UserInput::PlayPause).unwrap();
+                    app.update(PlayerEvent::PlayPause);
                 }
                 _ => {}
             },
-            event::Event::Tick => {
-                app.update();
-            }
         }
     }
 
-    player.join().unwrap();
     Ok(())
-}
-
-fn player(track: soundcloud::Track, rx: mpsc::Receiver<UserInput>) {
-    // load default output device
-    let device = rodio::default_output_device().unwrap();
-
-    // resolve and decode stream
-    let client = soundcloud::Client::new();
-    let stream = client.stream(track.stream_url).unwrap();
-    let source = rodio::Decoder::new(BufReader::new(stream)).unwrap();
-
-    // start audio on registered device
-    let sink = Sink::new(&device);
-    sink.append(source);
-
-    // listen for user events
-    loop {
-        let event = rx.recv().unwrap();
-        match event {
-            UserInput::PlayPause => {
-                if sink.is_paused() {
-                    sink.play()
-                } else {
-                    sink.pause();
-                }
-            }
-            UserInput::Quit => break,
-        }
-    }
 }
