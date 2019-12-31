@@ -13,3 +13,7 @@ rodio = { path = "../rodio" }
 serde = { version = "1.0.102", features = [ "derive" ] }
 termion = "1.5.3"
 tui = "0.8.0"
+
+[[bin]]
+name = "test"
+path = "src/test.rs"
