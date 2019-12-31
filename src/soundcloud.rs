@@ -18,9 +18,17 @@ pub struct Resource {
 pub struct Track {
     pub duration: u32,
     pub genre: String,
+    pub waveform_url: String,
     pub stream_url: String,
     pub title: String,
     pub user: User,
+}
+
+#[derive(Deserialize)]
+pub struct Wave {
+    pub width: u16,
+    pub height: u16,
+    pub samples: Vec<u16>,
 }
 
 #[derive(Deserialize)]
@@ -86,6 +94,18 @@ impl Client {
 
         thread::sleep(time::Duration::from_millis(100));
         Ok(reader)
+    }
+
+    pub fn wave(&self, track: &Track) -> Result<Wave, reqwest::Error> {
+        // build a json waveform url from the png url
+        let url = track.waveform_url.replace(".png", ".json");
+        let mut resp = self
+            .client
+            .get(&url)
+            .header(header::USER_AGENT, "scli")
+            .send()?;
+
+        Ok(resp.json()?)
     }
 
     fn resolve(&self, url: String) -> Result<String, reqwest::Error> {

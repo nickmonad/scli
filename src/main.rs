@@ -30,7 +30,7 @@ struct Player<'a> {
     progress: u8,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 enum PlayerState {
     Playing,
     Paused,
@@ -116,9 +116,10 @@ fn main() -> Result<(), failure::Error> {
     let args: Vec<String> = env::args().collect();
     let url = &args[1];
 
-    // resolve the track
+    // resolve the track and waveform
     let client = soundcloud::Client::new();
     let track = client.track(url.to_string()).unwrap();
+    let wave = client.wave(&track).unwrap();
 
     // start player thread and listen for incoming from it
     let mut app = Player::new(&track);
