@@ -21,14 +21,12 @@ mod event;
 mod soundcloud;
 mod wave;
 
-const SC_ORANGE: Color = Color::Rgb(237, 97, 43);
-
 struct Player<'a> {
     track: &'a soundcloud::Track,
     audio_sink: rodio::Sink,
     timer: Arc<Mutex<Duration>>,
     state: PlayerState,
-    progress: u8,
+    progress: f32,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -65,7 +63,7 @@ impl Player<'_> {
             audio_sink: sink,
             timer: timer,
             state: PlayerState::Playing,
-            progress: 0,
+            progress: 0.0,
         }
     }
 
@@ -76,11 +74,11 @@ impl Player<'_> {
                     self.state = PlayerState::Stopped;
                 } else {
                     if self.state == PlayerState::Stopped {
-                        self.progress = 0;
+                        self.progress = 0.0;
                     } else {
                         let val = *self.timer.lock().unwrap();
                         self.progress =
-                            ((val.as_millis() as f32 / self.track.duration as f32) * 100.0) as u8;
+                            (val.as_millis() as f32 / self.track.duration as f32) * 100.0;
                     }
                 }
             }
@@ -100,7 +98,7 @@ impl Player<'_> {
         self.state.clone()
     }
 
-    fn progress(&self) -> u8 {
+    fn progress(&self) -> f32 {
         self.progress
     }
 }
@@ -118,9 +116,9 @@ fn main() -> Result<(), failure::Error> {
     let url = &args[1];
 
     // resolve the track and waveform
-    let client = soundcloud::Client::new();
-    let track = client.track(url.to_string()).unwrap();
-    let wave = client.wave(&track).unwrap();
+    let sc = soundcloud::Client::new();
+    let track = sc.track(url.to_string()).unwrap();
+    let wave = sc.wave(&track).unwrap();
 
     // start player thread and listen for incoming from it
     let mut app = Player::new(&track);
@@ -138,6 +136,7 @@ fn main() -> Result<(), failure::Error> {
                 .width(wave.width)
                 .height(wave.height)
                 .samples(wave.samples.clone())
+                .progress(app.progress())
                 .render(&mut f, chunks[0])
         })?;
 
