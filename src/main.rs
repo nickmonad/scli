@@ -19,6 +19,7 @@ use tui::widgets::{Block, Borders, Gauge, Widget};
 use tui::Terminal;
 mod event;
 mod soundcloud;
+mod wave;
 
 const SC_ORANGE: Color = Color::Rgb(237, 97, 43);
 
@@ -130,18 +131,14 @@ fn main() -> Result<(), failure::Error> {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
-                .constraints([Constraint::Percentage(5), Constraint::Percentage(95)].as_ref())
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
                 .split(f.size());
 
-            Gauge::default()
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title(&format!("{} | {}", track.title, track.user.username)),
-                )
-                .style(Style::default().fg(SC_ORANGE))
-                .percent(app.progress().into())
-                .render(&mut f, chunks[0]);
+            wave::Wave::default()
+                .width(wave.width)
+                .height(wave.height)
+                .samples(wave.samples.clone())
+                .render(&mut f, chunks[0])
         })?;
 
         match events.next()? {
