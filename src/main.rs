@@ -13,9 +13,9 @@ use termion::event::Key;
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 use tui::backend::TermionBackend;
-use tui::layout::{Constraint, Direction, Layout};
-use tui::style::{Color, Style};
-use tui::widgets::{Block, Borders, Gauge, Widget};
+use tui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use tui::style::{Modifier, Style};
+use tui::widgets::{Paragraph, Text, Widget};
 use tui::Terminal;
 mod event;
 mod soundcloud;
@@ -126,18 +126,33 @@ fn main() -> Result<(), failure::Error> {
 
     loop {
         terminal.draw(|mut f| {
+            let size = f.size();
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .margin(1)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-                .split(f.size());
+                .margin(2)
+                .constraints([Constraint::Min(3), Constraint::Min(10)].as_ref())
+                .split(Rect {
+                    x: size.x,
+                    y: size.y,
+                    width: size.width,
+                    height: 10,
+                });
+
+            let header = [
+                Text::styled(&track.user.username, Style::default()),
+                Text::raw("\n"),
+                Text::styled(&track.title, Style::default().modifier(Modifier::BOLD)),
+            ];
+            Paragraph::new(header.iter())
+                .alignment(Alignment::Left)
+                .render(&mut f, chunks[0]);
 
             wave::Wave::default()
                 .width(wave.width)
                 .height(wave.height)
                 .samples(wave.samples.clone())
                 .progress(app.progress())
-                .render(&mut f, chunks[0])
+                .render(&mut f, chunks[1]);
         })?;
 
         match events.next()? {
