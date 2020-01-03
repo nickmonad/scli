@@ -65,7 +65,7 @@ impl Widget for Wave {
             let relative_pos = (x as f32 / width as f32) * 100.0;
             let default_style = Style::default().modifier(Modifier::BOLD);
             let style = if self.progress > relative_pos {
-                // progress if fully past x position
+                // progress is fully past x position
                 default_style.fg(ORANGE)
             } else if self.progress as u8 == relative_pos as u8 {
                 // progress is at or in-between x position

@@ -17,13 +17,14 @@ use tui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use tui::style::{Modifier, Style};
 use tui::widgets::{Paragraph, Text, Widget};
 use tui::Terminal;
+mod clock;
 mod event;
 mod soundcloud;
 mod wave;
 
 struct Player<'a> {
     track: &'a soundcloud::Track,
-    audio_sink: rodio::Sink,
+    audio: rodio::Sink,
     timer: Arc<Mutex<Duration>>,
     state: PlayerState,
     progress: f32,
@@ -60,7 +61,7 @@ impl Player<'_> {
 
         Player {
             track: track,
-            audio_sink: sink,
+            audio: sink,
             timer: timer,
             state: PlayerState::Playing,
             progress: 0.0,
@@ -70,24 +71,23 @@ impl Player<'_> {
     fn update(&mut self, msg: PlayerEvent) {
         match msg {
             PlayerEvent::Tick => {
-                if self.audio_sink.empty() {
+                if self.audio.empty() {
                     self.state = PlayerState::Stopped;
                 } else {
                     if self.state == PlayerState::Stopped {
                         self.progress = 0.0;
                     } else {
-                        let val = *self.timer.lock().unwrap();
                         self.progress =
-                            (val.as_millis() as f32 / self.track.duration as f32) * 100.0;
+                            (self.elapsed() as f32 / self.track.duration as f32) * 100.0;
                     }
                 }
             }
             PlayerEvent::PlayPause => {
-                if self.audio_sink.is_paused() {
-                    self.audio_sink.play();
+                if self.audio.is_paused() {
+                    self.audio.play();
                     self.state = PlayerState::Playing;
                 } else {
-                    self.audio_sink.pause();
+                    self.audio.pause();
                     self.state = PlayerState::Paused;
                 }
             }
@@ -100,6 +100,11 @@ impl Player<'_> {
 
     fn progress(&self) -> f32 {
         self.progress
+    }
+
+    fn elapsed(&self) -> u32 {
+        let val = *self.timer.lock().unwrap();
+        val.as_millis() as u32
     }
 }
 
@@ -121,22 +126,23 @@ fn main() -> Result<(), failure::Error> {
     let wave = sc.wave(&track).unwrap();
 
     // start player thread and listen for incoming from it
-    let mut app = Player::new(&track);
+    let mut player = Player::new(&track);
     let events = event::Events::new();
 
     loop {
         terminal.draw(|mut f| {
-            let size = f.size();
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .margin(2)
-                .constraints([Constraint::Min(3), Constraint::Min(10)].as_ref())
-                .split(Rect {
-                    x: size.x,
-                    y: size.y,
-                    width: size.width,
-                    height: 10,
-                });
+                .margin(1)
+                .constraints(
+                    [
+                        Constraint::Length(3),
+                        Constraint::Length(10),
+                        Constraint::Length(1),
+                    ]
+                    .as_ref(),
+                )
+                .split(f.size());
 
             let header = [
                 Text::styled(&track.user.username, Style::default()),
@@ -151,14 +157,19 @@ fn main() -> Result<(), failure::Error> {
                 .width(wave.width)
                 .height(wave.height)
                 .samples(wave.samples.clone())
-                .progress(app.progress())
+                .progress(player.progress())
                 .render(&mut f, chunks[1]);
+
+            clock::Clock::default()
+                .elapsed(player.elapsed())
+                .total(track.duration)
+                .render(&mut f, chunks[2]);
         })?;
 
         match events.next()? {
             event::Event::Tick => {
-                app.update(PlayerEvent::Tick);
-                if app.state() == PlayerState::Stopped {
+                player.update(PlayerEvent::Tick);
+                if player.state() == PlayerState::Stopped {
                     break;
                 }
             }
@@ -167,7 +178,7 @@ fn main() -> Result<(), failure::Error> {
                     break;
                 }
                 Key::Char(' ') => {
-                    app.update(PlayerEvent::PlayPause);
+                    player.update(PlayerEvent::PlayPause);
                 }
                 _ => {}
             },
