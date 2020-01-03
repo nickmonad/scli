@@ -145,6 +145,7 @@ fn main() -> Result<(), failure::Error> {
                 )
                 .split(f.size());
 
+            // track info
             let header = [
                 Text::styled(&track.user.username, Style::default()),
                 Text::raw("\n"),
@@ -154,6 +155,7 @@ fn main() -> Result<(), failure::Error> {
                 .alignment(Alignment::Left)
                 .render(&mut f, chunks[0]);
 
+            // waveform
             wave::Wave::default()
                 .width(wave.width)
                 .height(wave.height)
@@ -161,6 +163,20 @@ fn main() -> Result<(), failure::Error> {
                 .progress(player.progress())
                 .render(&mut f, chunks[1]);
 
+            // player state
+            let state = [Text::styled(
+                if player.state() == PlayerState::Playing {
+                    "Playing"
+                } else {
+                    "Paused"
+                },
+                Style::default(),
+            )];
+            Paragraph::new(state.iter())
+                .alignment(Alignment::Left)
+                .render(&mut f, chunks[2]);
+
+            // clock / duration
             clock::Clock::default()
                 .elapsed(player.elapsed())
                 .total(track.duration)
