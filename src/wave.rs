@@ -77,8 +77,8 @@ impl Widget for Wave {
             };
 
             // draw line
-            for y in 0..10 {
-                buf.set_string(x, area.top() + y, line[y as usize], style);
+            for y in 0..line.len() as u16 {
+                buf.set_string(area.left() + x, area.top() + y, line[y as usize], style);
             }
         }
     }

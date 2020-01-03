@@ -133,11 +133,12 @@ fn main() -> Result<(), failure::Error> {
         terminal.draw(|mut f| {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .margin(1)
+                .margin(2)
                 .constraints(
                     [
                         Constraint::Length(3),
                         Constraint::Length(10),
+                        Constraint::Length(1),
                         Constraint::Length(1),
                     ]
                     .as_ref(),
@@ -163,7 +164,7 @@ fn main() -> Result<(), failure::Error> {
             clock::Clock::default()
                 .elapsed(player.elapsed())
                 .total(track.duration)
-                .render(&mut f, chunks[2]);
+                .render(&mut f, chunks[3]);
         })?;
 
         match events.next()? {

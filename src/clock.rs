@@ -50,7 +50,7 @@ impl Widget for Clock {
         // show total time
         let total = Clock::format(self.total_ms);
         buf.set_string(
-            area.right() - total.len() as u16 - 1, // artistic adjustment
+            area.right() - total.len() as u16,
             area.top(),
             total,
             Style::default(),
