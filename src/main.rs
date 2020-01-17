@@ -13,13 +13,13 @@ use termion::event::Key;
 use termion::raw::IntoRawMode;
 use termion::screen::AlternateScreen;
 use tui::backend::TermionBackend;
-use tui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use tui::layout::{Alignment, Constraint, Direction, Layout};
 use tui::style::{Modifier, Style};
 use tui::widgets::{Paragraph, Text, Widget};
 use tui::Terminal;
-mod clock;
 mod event;
 mod soundcloud;
+mod status;
 mod wave;
 
 struct Player<'a> {
@@ -30,7 +30,7 @@ struct Player<'a> {
     progress: f32,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 enum PlayerState {
     Playing,
     Paused,
@@ -95,7 +95,7 @@ impl Player<'_> {
     }
 
     fn state(&self) -> PlayerState {
-        self.state.clone()
+        self.state
     }
 
     fn progress(&self) -> f32 {
@@ -139,7 +139,6 @@ fn main() -> Result<(), failure::Error> {
                         Constraint::Length(3),
                         Constraint::Length(10),
                         Constraint::Length(1),
-                        Constraint::Length(1),
                     ]
                     .as_ref(),
                 )
@@ -163,24 +162,14 @@ fn main() -> Result<(), failure::Error> {
                 .progress(player.progress())
                 .render(&mut f, chunks[1]);
 
-            // player state
-            let state = [Text::styled(
-                if player.state() == PlayerState::Playing {
-                    "Playing"
-                } else {
-                    "Paused"
-                },
-                Style::default(),
-            )];
-            Paragraph::new(state.iter())
-                .alignment(Alignment::Left)
+            // player status
+            status::Status::default()
+                .is_playing(player.state() == PlayerState::Playing)
+                .clock(status::Clock {
+                    elapsed_ms: player.elapsed(),
+                    total_ms: track.duration,
+                })
                 .render(&mut f, chunks[2]);
-
-            // clock / duration
-            clock::Clock::default()
-                .elapsed(player.elapsed())
-                .total(track.duration)
-                .render(&mut f, chunks[3]);
         })?;
 
         match events.next()? {

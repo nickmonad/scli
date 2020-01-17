@@ -1,6 +1,6 @@
 use tui::buffer::Buffer;
 use tui::layout::Rect;
-use tui::style::{Color, Modifier, Style};
+use tui::style::Style;
 use tui::widgets::Widget;
 
 pub struct Clock {
@@ -18,16 +18,6 @@ impl Default for Clock {
 }
 
 impl Clock {
-    pub fn elapsed(&mut self, elapsed_ms: u32) -> &mut Clock {
-        self.elapsed_ms = elapsed_ms;
-        self
-    }
-
-    pub fn total(&mut self, total_ms: u32) -> &mut Clock {
-        self.total_ms = total_ms;
-        self
-    }
-
     fn format(value_ms: u32) -> String {
         let hours = value_ms / (3600 * 1000); // hours in ms
         let minutes = value_ms / (60 * 1000); // minutes in ms
@@ -41,14 +31,49 @@ impl Clock {
     }
 }
 
-impl Widget for Clock {
+pub struct Status {
+    pub is_playing: bool,
+    pub clock: Clock,
+}
+
+impl Default for Status {
+    fn default() -> Status {
+        Status {
+            is_playing: false,
+            clock: Clock::default(),
+        }
+    }
+}
+
+impl Status {
+    pub fn is_playing(&mut self, is_playing: bool) -> &mut Status {
+        self.is_playing = is_playing;
+        self
+    }
+
+    pub fn clock(&mut self, clock: Clock) -> &mut Status {
+        self.clock = clock;
+        self
+    }
+}
+
+impl Widget for Status {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         // show elapsed time
-        let elapsed = Clock::format(self.elapsed_ms);
-        buf.set_string(area.left(), area.top(), elapsed, Style::default());
+        let elapsed = Clock::format(self.clock.elapsed_ms);
+        buf.set_string(area.left(), area.top(), &elapsed, Style::default());
+
+        // show state
+        let state = if self.is_playing { "Playing" } else { "Paused" };
+        buf.set_string(
+            area.left() + elapsed.len() as u16 + 2,
+            area.top(),
+            state,
+            Style::default(),
+        );
 
         // show total time
-        let total = Clock::format(self.total_ms);
+        let total = Clock::format(self.clock.total_ms);
         buf.set_string(
             area.right() - total.len() as u16,
             area.top(),

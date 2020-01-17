@@ -3,6 +3,7 @@ name = "scli"
 version = "0.1.0"
 authors = ["Nick Miller <nick.miller@soundcloud.com>"]
 edition = "2018"
+default-run = "scli"
 
 [dependencies]
 failure = "*"
