@@ -20,7 +20,7 @@ impl Default for Clock {
 impl Clock {
     fn format(value_ms: u32) -> String {
         let hours = value_ms / (3600 * 1000); // hours in ms
-        let minutes = value_ms / (60 * 1000); // minutes in ms
+        let minutes = value_ms / (60 * 1000) % 60; // minutes in ms
         let seconds = value_ms % (60 * 1000) / 1000; // seconds in ms
 
         if hours > 0 {
@@ -80,5 +80,23 @@ impl Widget for Status {
             total,
             Style::default(),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clock_format() {
+        assert_eq!(Clock::format(0), "00:00");
+
+        assert_eq!(Clock::format(1000), "00:01");
+        assert_eq!(Clock::format(1000 * 60), "01:00");
+        assert_eq!(Clock::format(1000 * 60 * 60), "01:00:00");
+
+        assert_eq!(Clock::format(271019), "04:31");
+        assert_eq!(Clock::format(4112738), "01:08:32");
+        assert_eq!(Clock::format(8688931), "02:24:48");
     }
 }
