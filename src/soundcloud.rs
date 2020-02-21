@@ -1,7 +1,5 @@
-use reqwest::header;
+use reqwest::{header, Response};
 use std::env;
-use std::fs::File;
-use std::{thread, time};
 
 pub struct Client {
     client: reqwest::Client,
@@ -64,7 +62,7 @@ impl Client {
         })
     }
 
-    pub fn stream(&self, stream_url: &String) -> Result<File, reqwest::Error> {
+    pub fn stream(&self, stream_url: &String) -> Result<Response, reqwest::Error> {
         // resolve stream url
         let mut resolve_resp = self
             .client
@@ -75,25 +73,9 @@ impl Client {
 
         // get raw audio from resolved resource
         let resource: Resource = resolve_resp.json()?;
-        let mut resp = self.client.get(&resource.location).send().unwrap();
+        let resp = self.client.get(&resource.location).send().unwrap();
 
-        // create a temporary file on disk and spawn a thread to write to it
-        let mut writer = File::create("stream.mp3").unwrap();
-        let reader = File::open("stream.mp3").unwrap();
-
-        // TODO(ngmiller)
-        // This is terribly hacky. It seems the returned reader file handle
-        // doesn't handle the writing very well when stream.mp3 doesn't exist
-        // and causes the player thread to error out with an unrecognized format,
-        // so we need to sleep a bit after starting the writer thread.
-        // Ideally, this is all buffered in memory and we don't have to use a file
-        // to coordinate.
-        thread::spawn(move || {
-            resp.copy_to(&mut writer).unwrap();
-        });
-
-        thread::sleep(time::Duration::from_millis(100));
-        Ok(reader)
+        Ok(resp)
     }
 
     pub fn wave(&self, track: &Track) -> Result<Wave, reqwest::Error> {

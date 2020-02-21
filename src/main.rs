@@ -17,6 +17,7 @@ use tui::layout::{Alignment, Constraint, Direction, Layout};
 use tui::style::{Modifier, Style};
 use tui::widgets::{Paragraph, Text, Widget};
 use tui::Terminal;
+mod decoder;
 mod event;
 mod soundcloud;
 mod status;
@@ -50,7 +51,7 @@ impl Player<'_> {
         // resolve and decode stream
         let client = soundcloud::Client::new();
         let stream = client.stream(&track.stream_url).unwrap();
-        let source = rodio::Decoder::new(BufReader::new(stream)).unwrap();
+        let source = decoder::Mp3Decoder::new(BufReader::new(stream)).unwrap();
 
         let timer = Arc::new(Mutex::new(Duration::from_secs(0)));
         let with_elapsed = source.buffered().elapsed(Arc::clone(&timer));

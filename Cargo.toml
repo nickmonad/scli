@@ -7,7 +7,8 @@ default-run = "scli"
 
 [dependencies]
 failure = "*"
-reqwest = "0.9.22"
+minimp3 = "0.3.3"
+reqwest = "0.9.24"
 # rodio - using patched version that includes an 'elapsed' source filter
 # https://github.com/RustAudio/rodio/issues/192
 rodio = { path = "../rodio" }
