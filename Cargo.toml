@@ -11,10 +11,14 @@ minimp3 = "0.3.3"
 reqwest = "0.9.24"
 # rodio - using patched version that includes an 'elapsed' source filter
 # https://github.com/RustAudio/rodio/issues/192
-rodio = { path = "../rodio" }
+rodio = { git = "https://github.com/ngmiller/rodio", branch = "with-elapsed" }
 serde = { version = "1.0.102", features = [ "derive" ] }
 termion = "1.5.3"
 tui = "0.8.0"
+
+[[bin]]
+name = "scli"
+path = "src/main.rs"
 
 [[bin]]
 name = "test"
