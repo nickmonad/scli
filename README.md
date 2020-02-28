@@ -18,10 +18,10 @@ $ scli https://soundcloud.com/trippycode/boris-brejcha-art-of-minimal-techno-tri
 ### Controls
 
 ```
-* Play/Pause: spacebar
-* Quit:       q
-* Up:         volume up (max 100%)
-* Down:       volume down (min 0%)
+* Play/Pause:  spacebar
+* Quit:        q
+* Volume up:   up (max 100%)
+* Volume down: down (min 0%)
 ```
 
 ## Install
