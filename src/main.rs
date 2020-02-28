@@ -29,6 +29,7 @@ struct Player<'a> {
     timer: Arc<Mutex<Duration>>,
     state: PlayerState,
     progress: f32,
+    volume: u8,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -41,6 +42,8 @@ enum PlayerState {
 enum PlayerEvent {
     Tick,
     PlayPause,
+    VolumeUp,
+    VolumeDown,
 }
 
 impl Player<'_> {
@@ -66,6 +69,7 @@ impl Player<'_> {
             timer: timer,
             state: PlayerState::Playing,
             progress: 0.0,
+            volume: 100,
         }
     }
 
@@ -92,6 +96,22 @@ impl Player<'_> {
                     self.state = PlayerState::Paused;
                 }
             }
+            PlayerEvent::VolumeUp => {
+                if self.volume == 100 {
+                    return;
+                }
+
+                self.volume = self.volume + 1;
+                self.audio.set_volume(self.volume as f32 / 100.0);
+            }
+            PlayerEvent::VolumeDown => {
+                if self.volume == 0 {
+                    return;
+                }
+
+                self.volume = self.volume - 1;
+                self.audio.set_volume(self.volume as f32 / 100.0);
+            }
         }
     }
 
@@ -101,6 +121,10 @@ impl Player<'_> {
 
     fn progress(&self) -> f32 {
         self.progress
+    }
+
+    fn volume(&self) -> u8 {
+        self.volume
     }
 
     fn elapsed(&self) -> u32 {
@@ -166,6 +190,7 @@ fn main() -> Result<(), failure::Error> {
             // player status
             status::Status::default()
                 .is_playing(player.state() == PlayerState::Playing)
+                .volume(player.volume())
                 .clock(status::Clock {
                     elapsed_ms: player.elapsed(),
                     total_ms: track.duration,
@@ -186,6 +211,12 @@ fn main() -> Result<(), failure::Error> {
                 }
                 Key::Char(' ') => {
                     player.update(PlayerEvent::PlayPause);
+                }
+                Key::Up => {
+                    player.update(PlayerEvent::VolumeUp);
+                }
+                Key::Down => {
+                    player.update(PlayerEvent::VolumeDown);
                 }
                 _ => {}
             },

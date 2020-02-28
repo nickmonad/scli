@@ -33,6 +33,7 @@ impl Clock {
 
 pub struct Status {
     pub is_playing: bool,
+    pub volume: u8,
     pub clock: Clock,
 }
 
@@ -40,6 +41,7 @@ impl Default for Status {
     fn default() -> Status {
         Status {
             is_playing: false,
+            volume: 0,
             clock: Clock::default(),
         }
     }
@@ -48,6 +50,11 @@ impl Default for Status {
 impl Status {
     pub fn is_playing(&mut self, is_playing: bool) -> &mut Status {
         self.is_playing = is_playing;
+        self
+    }
+
+    pub fn volume(&mut self, volume: u8) -> &mut Status {
+        self.volume = volume;
         self
     }
 
@@ -61,16 +68,18 @@ impl Widget for Status {
     fn draw(&mut self, area: Rect, buf: &mut Buffer) {
         // show elapsed time
         let elapsed = Clock::format(self.clock.elapsed_ms);
-        buf.set_string(area.left(), area.top(), &elapsed, Style::default());
+        let elapsed_x = area.left();
+        buf.set_string(elapsed_x, area.top(), &elapsed, Style::default());
 
         // show state
         let state = if self.is_playing { "Playing" } else { "Paused" };
-        buf.set_string(
-            area.left() + elapsed.len() as u16 + 2,
-            area.top(),
-            state,
-            Style::default(),
-        );
+        let state_x = elapsed_x + elapsed.len() as u16 + 2;
+        buf.set_string(state_x, area.top(), state, Style::default());
+
+        // show volume
+        let volume = format!("Volume: {}%", self.volume);
+        let volume_x = state_x + state.len() as u16 + 2;
+        buf.set_string(volume_x, area.top(), volume, Style::default());
 
         // show total time
         let total = Clock::format(self.clock.total_ms);
