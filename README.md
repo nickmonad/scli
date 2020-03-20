@@ -34,11 +34,4 @@ Then,
 cargo install --git https://github.com/ngmiller/scli.git --bin scli
 ```
 
-Set your SoundCloud OAuth token as an environment variable. Ideally inside your bash/terminal configuration
-so you don't leak it in your shell history.
-
-```
-export SC_TOKEN=<oauth token here>
-```
-
 See `How?` above for running and controls.
