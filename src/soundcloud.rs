@@ -1,9 +1,11 @@
 use reqwest::{header, Response};
-use std::env;
+
+// scli soundcloud app client id
+const CLIENT_ID: &str = "nWYlHdW5jX1OyNQ9pipPhlUK9xDX8XFF";
 
 pub struct Client {
     client: reqwest::Client,
-    oauth: String,
+    client_id: String,
     url: String,
 }
 
@@ -36,7 +38,6 @@ pub struct User {
 
 impl Client {
     pub fn new() -> Client {
-        let oauth = env::var("SC_TOKEN").expect("no oauth token set");
         let rc = reqwest::Client::builder()
             .redirect(reqwest::RedirectPolicy::none())
             .build()
@@ -44,7 +45,7 @@ impl Client {
 
         Client {
             client: rc,
-            oauth: oauth,
+            client_id: CLIENT_ID.to_string(),
             url: "https://api.soundcloud.com".to_string(),
         }
     }
@@ -55,7 +56,7 @@ impl Client {
                 .client
                 .get(&location)
                 .header(header::USER_AGENT, "scli")
-                .query(&[("oauth_token", &self.oauth)])
+                .query(&[("client_id", &self.client_id)])
                 .send()?;
 
             Ok(resp.json()?)
@@ -68,7 +69,7 @@ impl Client {
             .client
             .get(stream_url)
             .header(header::USER_AGENT, "scli")
-            .query(&[("oauth_token", &self.oauth)])
+            .query(&[("client_id", &self.client_id)])
             .send()?;
 
         // get raw audio from resolved resource
@@ -96,7 +97,7 @@ impl Client {
             .client
             .get(&endpoint)
             .header(header::USER_AGENT, "scli")
-            .query(&[("oauth_token", &self.oauth)])
+            .query(&[("client_id", &self.client_id)])
             .query(&[("url", url)])
             .send()?;
 
